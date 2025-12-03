@@ -2,5 +2,5 @@
 
 #启动docker
 
-docker-compose up -d
+docker compose up -d
 

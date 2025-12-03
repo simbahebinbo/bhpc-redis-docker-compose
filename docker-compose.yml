@@ -3,17 +3,234 @@ networks:
     driver: bridge
 
 volumes:
-  redis-data:
+  redis-standalone-data:
+  redis-replication-master-data:
+  redis-replication-slave-data:
+  redis-sentinel-master-data:
+  redis-sentinel-slave-data:
+  redis-sentinel-data:
+  redis-cluster-data-1:
+  redis-cluster-data-2:
+  redis-cluster-data-3:
+  redis-cluster-data-4:
+  redis-cluster-data-5:
+  redis-cluster-data-6:
 
 services:
-  redis:
-    image: redis:7.4.1-alpine
-    container_name: redis-server
-    command: redis-server --requirepass 123456
+  # ========== 1. 单机模式 (Standalone) ==========
+  redis-standalone:
+    image: redis:${REDIS_VERSION}
+    container_name: redis-standalone
+    command: redis-server --requirepass ${REDIS_PASSWORD}
     networks:
       - redis-privatenet
     ports:
-      - "6379:6379"
+      - "6380:6379"
     volumes:
-      - redis-data:/data
+      - redis-standalone-data:/data
+    restart: unless-stopped
 
+  # ========== 2. 主从复制模式 (Master-Slave Replication) ==========
+  # 主节点
+  redis-replication-master:
+    image: redis:${REDIS_VERSION}
+    container_name: redis-replication-master
+    command: redis-server --requirepass ${REDIS_PASSWORD} --masterauth ${REDIS_PASSWORD}
+    networks:
+      - redis-privatenet
+    ports:
+      - "6381:6379"
+    volumes:
+      - redis-replication-master-data:/data
+    restart: unless-stopped
+
+  # 从节点
+  redis-replication-slave:
+    image: redis:${REDIS_VERSION}
+    container_name: redis-replication-slave
+    command: >
+      redis-server 
+      --requirepass ${REDIS_PASSWORD} 
+      --masterauth ${REDIS_PASSWORD} 
+      --replicaof redis-replication-master 6379
+    networks:
+      - redis-privatenet
+    ports:
+      - "6382:6379"
+    volumes:
+      - redis-replication-slave-data:/data
+    depends_on:
+      - redis-replication-master
+    restart: unless-stopped
+
+  # ========== 3. 哨兵模式 (Sentinel) - 主从复制 + 哨兵监控 ==========
+  # 主节点
+  redis-sentinel-master:
+    image: redis:${REDIS_VERSION}
+    container_name: redis-sentinel-master
+    command: redis-server --requirepass ${REDIS_PASSWORD} --masterauth ${REDIS_PASSWORD}
+    networks:
+      - redis-privatenet
+    ports:
+      - "6383:6379"
+    volumes:
+      - redis-sentinel-master-data:/data
+    restart: unless-stopped
+
+  # 从节点
+  redis-sentinel-slave:
+    image: redis:${REDIS_VERSION}
+    container_name: redis-sentinel-slave
+    command: >
+      redis-server 
+      --requirepass ${REDIS_PASSWORD} 
+      --masterauth ${REDIS_PASSWORD} 
+      --replicaof redis-sentinel-master 6379
+    networks:
+      - redis-privatenet
+    ports:
+      - "6384:6379"
+    volumes:
+      - redis-sentinel-slave-data:/data
+    depends_on:
+      - redis-sentinel-master
+    restart: unless-stopped
+
+  # 哨兵节点
+  redis-sentinel:
+    image: redis:${REDIS_VERSION}
+    container_name: redis-sentinel
+    command: >
+      redis-sentinel /etc/redis/sentinel.conf
+    networks:
+      - redis-privatenet
+    ports:
+      - "6385:26379"
+    volumes:
+      - ./sentinel.conf:/etc/redis/sentinel.conf:ro
+      - redis-sentinel-data:/data
+    depends_on:
+      - redis-sentinel-master
+      - redis-sentinel-slave
+    restart: unless-stopped
+
+  # ========== 4. 集群模式 (Cluster) ==========
+  redis-cluster-1:
+    image: redis:${REDIS_VERSION}
+    container_name: redis-cluster-1
+    command: >
+      redis-server 
+      --requirepass ${REDIS_PASSWORD} 
+      --masterauth ${REDIS_PASSWORD} 
+      --cluster-enabled yes 
+      --cluster-config-file nodes-1.conf 
+      --cluster-node-timeout 5000 
+      --appendonly yes
+    networks:
+      - redis-privatenet
+    ports:
+      - "7000:6379"
+      - "17000:16379"
+    volumes:
+      - redis-cluster-data-1:/data
+    restart: unless-stopped
+
+  redis-cluster-2:
+    image: redis:${REDIS_VERSION}
+    container_name: redis-cluster-2
+    command: >
+      redis-server 
+      --requirepass ${REDIS_PASSWORD} 
+      --masterauth ${REDIS_PASSWORD} 
+      --cluster-enabled yes 
+      --cluster-config-file nodes-2.conf 
+      --cluster-node-timeout 5000 
+      --appendonly yes
+    networks:
+      - redis-privatenet
+    ports:
+      - "7001:6379"
+      - "17001:16379"
+    volumes:
+      - redis-cluster-data-2:/data
+    restart: unless-stopped
+
+  redis-cluster-3:
+    image: redis:${REDIS_VERSION}
+    container_name: redis-cluster-3
+    command: >
+      redis-server 
+      --requirepass ${REDIS_PASSWORD} 
+      --masterauth ${REDIS_PASSWORD} 
+      --cluster-enabled yes 
+      --cluster-config-file nodes-3.conf 
+      --cluster-node-timeout 5000 
+      --appendonly yes
+    networks:
+      - redis-privatenet
+    ports:
+      - "7002:6379"
+      - "17002:16379"
+    volumes:
+      - redis-cluster-data-3:/data
+    restart: unless-stopped
+
+  redis-cluster-4:
+    image: redis:${REDIS_VERSION}
+    container_name: redis-cluster-4
+    command: >
+      redis-server 
+      --requirepass ${REDIS_PASSWORD} 
+      --masterauth ${REDIS_PASSWORD} 
+      --cluster-enabled yes 
+      --cluster-config-file nodes-4.conf 
+      --cluster-node-timeout 5000 
+      --appendonly yes
+    networks:
+      - redis-privatenet
+    ports:
+      - "7003:6379"
+      - "17003:16379"
+    volumes:
+      - redis-cluster-data-4:/data
+    restart: unless-stopped
+
+  redis-cluster-5:
+    image: redis:${REDIS_VERSION}
+    container_name: redis-cluster-5
+    command: >
+      redis-server 
+      --requirepass ${REDIS_PASSWORD} 
+      --masterauth ${REDIS_PASSWORD} 
+      --cluster-enabled yes 
+      --cluster-config-file nodes-5.conf 
+      --cluster-node-timeout 5000 
+      --appendonly yes
+    networks:
+      - redis-privatenet
+    ports:
+      - "7004:6379"
+      - "17004:16379"
+    volumes:
+      - redis-cluster-data-5:/data
+    restart: unless-stopped
+
+  redis-cluster-6:
+    image: redis:${REDIS_VERSION}
+    container_name: redis-cluster-6
+    command: >
+      redis-server 
+      --requirepass ${REDIS_PASSWORD} 
+      --masterauth ${REDIS_PASSWORD} 
+      --cluster-enabled yes 
+      --cluster-config-file nodes-6.conf 
+      --cluster-node-timeout 5000 
+      --appendonly yes
+    networks:
+      - redis-privatenet
+    ports:
+      - "7005:6379"
+      - "17005:16379"
+    volumes:
+      - redis-cluster-data-6:/data
+    restart: unless-stopped
