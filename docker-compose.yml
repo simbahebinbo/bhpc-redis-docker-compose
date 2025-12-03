@@ -101,13 +101,13 @@ services:
     image: redis:${REDIS_VERSION}
     container_name: redis-sentinel
     command: >
-      redis-sentinel /etc/redis/sentinel.conf
+      redis-sentinel /etc/redis/sentinel.conf --sentinel
     networks:
       - redis-privatenet
     ports:
       - "6385:26379"
     volumes:
-      - ./sentinel.conf:/etc/redis/sentinel.conf:ro
+      - ./sentinel.conf:/etc/redis/sentinel.conf
       - redis-sentinel-data:/data
     depends_on:
       - redis-sentinel-master
@@ -129,8 +129,8 @@ services:
     networks:
       - redis-privatenet
     ports:
-      - "7000:6379"
-      - "17000:16379"
+      - "7006:6379"
+      - "17006:16379"
     volumes:
       - redis-cluster-data-1:/data
     restart: unless-stopped
