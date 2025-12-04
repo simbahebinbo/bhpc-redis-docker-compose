@@ -297,6 +297,12 @@ services:
           redis-cli -h redis-cluster-$$i -p 6379 -a ${REDIS_PASSWORD} CONFIG SET cluster-announce-port $$port
           redis-cli -h redis-cluster-$$i -p 6379 -a ${REDIS_PASSWORD} CONFIG SET cluster-announce-bus-port $$bus_port
         done
+        sleep 3
+        # 触发集群拓扑刷新：通过向每个节点发送 PING，让它们重新发现拓扑
+        # 这样 cluster-announce-ip 配置会生效
+        for i in 1 2 3 4 5 6; do
+          redis-cli -h redis-cluster-$$i -p 6379 -a ${REDIS_PASSWORD} PING > /dev/null
+        done
         sleep 2
     networks:
       - redis-privatenet
