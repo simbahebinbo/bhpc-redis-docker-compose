@@ -101,17 +101,10 @@ echo ""
 # 4. 测试集群模式
 echo "4. 集群模式 (Cluster)"
 CLUSTER_RESULT=0
-# 集群节点端口映射：1->7006, 2->7001, 3->7002, 4->7003, 5->7004, 6->7005
+# 集群节点端口映射：1->7001, 2->7002, 3->7003, 4->7004, 5->7005, 6->7006
 for i in 1 2 3 4 5 6; do
     container_name="redis-cluster-$i"
-    case $i in
-        1) port=7006 ;;
-        2) port=7001 ;;
-        3) port=7002 ;;
-        4) port=7003 ;;
-        5) port=7004 ;;
-        6) port=7005 ;;
-    esac
+    port=$((7000 + i))
     if docker ps | grep -q "$container_name"; then
         test_redis "$container_name" "localhost" "$port" "$REDIS_PASSWORD"
         if [ $? -ne 0 ]; then
@@ -122,6 +115,25 @@ for i in 1 2 3 4 5 6; do
         CLUSTER_RESULT=1
     fi
 done
+
+# 检查集群初始化状态
+echo "检查集群初始化状态..."
+cluster_container=$(docker ps -qf "name=^redis-cluster-1$")
+if [ -n "$cluster_container" ]; then
+    CLUSTER_STATE=$(docker exec "$cluster_container" redis-cli -p 6379 -a "$REDIS_PASSWORD" CLUSTER INFO 2>/dev/null | grep "cluster_state" | cut -d: -f2 | tr -d '\r\n ' || echo "fail")
+    if [ "$CLUSTER_STATE" = "ok" ]; then
+        echo "[OK] Redis 集群已正确初始化 (cluster_state: ok)"
+        # 检查集群节点数量
+        CLUSTER_NODES=$(docker exec "$cluster_container" redis-cli -p 6379 -a "$REDIS_PASSWORD" CLUSTER NODES 2>/dev/null | wc -l | tr -d ' ')
+        echo "    集群节点数: $CLUSTER_NODES"
+    else
+        echo "[FAIL] Redis 集群未正确初始化 (cluster_state: $CLUSTER_STATE)"
+        CLUSTER_RESULT=1
+    fi
+else
+    echo "[FAIL] 无法检查集群状态，redis-cluster-1 容器未找到"
+    CLUSTER_RESULT=1
+fi
 echo ""
 
 # 汇总结果
