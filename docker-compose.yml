@@ -129,10 +129,15 @@ services:
     networks:
       - redis-privatenet
     ports:
-      - "7006:6379"
-      - "17006:16379"
+      - "7001:6379"
+      - "17001:16379"
     volumes:
       - redis-cluster-data-1:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
 
   redis-cluster-2:
@@ -149,10 +154,15 @@ services:
     networks:
       - redis-privatenet
     ports:
-      - "7001:6379"
-      - "17001:16379"
+      - "7002:6379"
+      - "17002:16379"
     volumes:
       - redis-cluster-data-2:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
 
   redis-cluster-3:
@@ -169,10 +179,15 @@ services:
     networks:
       - redis-privatenet
     ports:
-      - "7002:6379"
-      - "17002:16379"
+      - "7003:6379"
+      - "17003:16379"
     volumes:
       - redis-cluster-data-3:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
 
   redis-cluster-4:
@@ -189,10 +204,15 @@ services:
     networks:
       - redis-privatenet
     ports:
-      - "7003:6379"
-      - "17003:16379"
+      - "7004:6379"
+      - "17004:16379"
     volumes:
       - redis-cluster-data-4:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
 
   redis-cluster-5:
@@ -209,10 +229,15 @@ services:
     networks:
       - redis-privatenet
     ports:
-      - "7004:6379"
-      - "17004:16379"
+      - "7005:6379"
+      - "17005:16379"
     volumes:
       - redis-cluster-data-5:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
 
   redis-cluster-6:
@@ -229,8 +254,48 @@ services:
     networks:
       - redis-privatenet
     ports:
-      - "7005:6379"
-      - "17005:16379"
+      - "7006:6379"
+      - "17006:16379"
     volumes:
       - redis-cluster-data-6:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
+
+  # Redis 集群初始化服务
+  redis-cluster-init:
+    image: redis:${REDIS_VERSION}
+    container_name: redis-cluster-init
+    command: >
+      sh -c "
+        echo '初始化 Redis 集群...';
+        redis-cli -h redis-cluster-1 -p 6379 -a ${REDIS_PASSWORD} --cluster create \
+          redis-cluster-1:6379 \
+          redis-cluster-2:6379 \
+          redis-cluster-3:6379 \
+          redis-cluster-4:6379 \
+          redis-cluster-5:6379 \
+          redis-cluster-6:6379 \
+          --cluster-replicas 1 \
+          --cluster-yes;
+        echo 'Redis 集群初始化完成！';
+      "
+    networks:
+      - redis-privatenet
+    depends_on:
+      redis-cluster-1:
+        condition: service_healthy
+      redis-cluster-2:
+        condition: service_healthy
+      redis-cluster-3:
+        condition: service_healthy
+      redis-cluster-4:
+        condition: service_healthy
+      redis-cluster-5:
+        condition: service_healthy
+      redis-cluster-6:
+        condition: service_healthy
+    restart: "no"
