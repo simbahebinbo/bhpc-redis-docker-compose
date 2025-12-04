@@ -125,6 +125,9 @@ services:
       --cluster-enabled yes 
       --cluster-config-file nodes-1.conf 
       --cluster-node-timeout 5000 
+      --cluster-announce-ip 127.0.0.1
+      --cluster-announce-port 7001
+      --cluster-announce-bus-port 17001
       --appendonly yes
     networks:
       - redis-privatenet
@@ -150,6 +153,9 @@ services:
       --cluster-enabled yes 
       --cluster-config-file nodes-2.conf 
       --cluster-node-timeout 5000 
+      --cluster-announce-ip 127.0.0.1
+      --cluster-announce-port 7002
+      --cluster-announce-bus-port 17002
       --appendonly yes
     networks:
       - redis-privatenet
@@ -175,6 +181,9 @@ services:
       --cluster-enabled yes 
       --cluster-config-file nodes-3.conf 
       --cluster-node-timeout 5000 
+      --cluster-announce-ip 127.0.0.1
+      --cluster-announce-port 7003
+      --cluster-announce-bus-port 17003
       --appendonly yes
     networks:
       - redis-privatenet
@@ -200,6 +209,9 @@ services:
       --cluster-enabled yes 
       --cluster-config-file nodes-4.conf 
       --cluster-node-timeout 5000 
+      --cluster-announce-ip 127.0.0.1
+      --cluster-announce-port 7004
+      --cluster-announce-bus-port 17004
       --appendonly yes
     networks:
       - redis-privatenet
@@ -225,6 +237,9 @@ services:
       --cluster-enabled yes 
       --cluster-config-file nodes-5.conf 
       --cluster-node-timeout 5000 
+      --cluster-announce-ip 127.0.0.1
+      --cluster-announce-port 7005
+      --cluster-announce-bus-port 17005
       --appendonly yes
     networks:
       - redis-privatenet
@@ -250,6 +265,9 @@ services:
       --cluster-enabled yes 
       --cluster-config-file nodes-6.conf 
       --cluster-node-timeout 5000 
+      --cluster-announce-ip 127.0.0.1
+      --cluster-announce-port 7006
+      --cluster-announce-bus-port 17006
       --appendonly yes
     networks:
       - redis-privatenet
