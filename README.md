@@ -1,6 +1,6 @@
 ### 配置说明
 
-然后根据需要修改 `.env` 文件中的 `REDIS_VERSION` 和 `REDIS_PASSWORD`。
+然后根据需要修改 `.env` 文件中的  `REDIS_PASSWORD`。
 
 ### Redis 部署模式说明
 
@@ -21,7 +21,7 @@
    - 连接方式: 通过哨兵端口 `6385` 连接
 
 4. **集群模式 (Cluster)**
-   - 节点端口: `7001-7006` (容器: `redis-cluster-1` 到 `redis-cluster-6`)
+   - 节点端口: `7001-7006` (容器: `redis-cluster` )
    - 集群总线端口: `17001-17006`
 
 
@@ -76,5 +76,5 @@ redis-cli -h localhost -p 6385 -a 123456
 
 * 集群模式
 ```shell
-redis-cli -h localhost -p 7001 -a 123456 -c
+redis-cli -h localhost -p 7001 -c
 ```

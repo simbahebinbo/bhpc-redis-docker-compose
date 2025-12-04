@@ -1,11 +1,7 @@
 #!/bin/bash
 
-# 读取 .env 文件获取密码
-if [ -f .env ]; then
-    source .env
-fi
 
-REDIS_PASSWORD=${REDIS_PASSWORD:-123456}
+REDIS_PASSWORD=123456
 
 echo "=========================================="
 echo "测试 Redis 所有模式"

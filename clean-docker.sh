@@ -5,8 +5,7 @@
 # 当前项目的容器名
 containers=("redis-standalone" "redis-replication-master" "redis-replication-slave" \
             "redis-sentinel-master" "redis-sentinel-slave" "redis-sentinel" \
-            "redis-cluster-1" "redis-cluster-2" "redis-cluster-3" \
-            "redis-cluster-4" "redis-cluster-5" "redis-cluster-6")
+            "redis-cluster")
 
 # 删除已退出的容器
 for container_name in "${containers[@]}"; do
