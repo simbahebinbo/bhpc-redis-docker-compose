@@ -155,5 +155,7 @@ services:
       - "17006:17005"
     volumes:
       - redis-cluster-data:/data
+      # 挂载自定义模板文件，添加 protected-mode no 配置
+      - ./redis-cluster.tmpl:/redis-conf/redis-cluster.tmpl:ro
     restart: unless-stopped
 

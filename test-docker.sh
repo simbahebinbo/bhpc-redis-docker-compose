@@ -8,7 +8,7 @@ echo "测试 Redis 所有模式"
 echo "=========================================="
 echo ""
 
-# 测试函数
+# 测试函数 - 使用宿主机 redis-cli 连接（如果已安装），否则使用 docker exec
 test_redis() {
     local name=$1
     local host=$2
@@ -16,17 +16,40 @@ test_redis() {
     local password=$4
     
     echo "测试 $name (端口 $port)..."
-    # Bitnami 镜像需要使用 -h localhost 参数
-    # grokzen 默认无密码，但为了兼容性，如果提供了密码也尝试使用
+
+    # 优先使用宿主机 redis-cli（如果已安装）
+    if command -v redis-cli >/dev/null 2>&1; then
+        if [ -z "$password" ] || [ "$password" = "" ]; then
+            # 无密码连接（grokzen 默认）
+            if redis-cli -h "$host" -p "$port" ping 2>/dev/null | grep -q PONG; then
+                echo "[OK] $name 连接成功"
+                return 0
+            fi
+        else
+            # 有密码连接（bitnami）
+            if redis-cli -h "$host" -p "$port" -a "$password" ping 2>/dev/null | grep -q PONG; then
+                echo "[OK] $name 连接成功"
+                return 0
+            fi
+        fi
+    fi
+
+    # 回退到使用 docker exec（兼容旧方式）
+    local container_id=$(docker ps -qf "name=$name")
+    if [ -z "$container_id" ]; then
+        echo "[FAIL] $name 容器未找到"
+        return 1
+    fi
+
     if [ -z "$password" ] || [ "$password" = "" ]; then
         # 无密码连接（grokzen 默认）
-        if docker exec $(docker ps -qf "name=$name") redis-cli -h localhost ping 2>/dev/null | grep -q PONG; then
+        if docker exec "$container_id" redis-cli -h localhost ping 2>/dev/null | grep -q PONG; then
             echo "[OK] $name 连接成功"
             return 0
         fi
     else
         # 有密码连接（bitnami）
-        if docker exec $(docker ps -qf "name=$name") redis-cli -h localhost -a "$password" ping 2>/dev/null | grep -q PONG; then
+        if docker exec "$container_id" redis-cli -h localhost -a "$password" ping 2>/dev/null | grep -q PONG; then
             echo "[OK] $name 连接成功"
             return 0
         fi
@@ -85,9 +108,9 @@ fi
 
 if docker ps | grep -q redis-sentinel; then
     echo "测试 redis-sentinel (哨兵端口 6385)..."
-    sentinel_container=$(docker ps -qf "name=^redis-sentinel$")
-    if [ -n "$sentinel_container" ]; then
-        if docker exec "$sentinel_container" redis-cli -p 26379 ping 2>/dev/null | grep -q PONG; then
+    # 优先使用宿主机 redis-cli
+    if command -v redis-cli >/dev/null 2>&1; then
+        if redis-cli -h localhost -p 6385 ping 2>/dev/null | grep -q PONG; then
             echo "[OK] redis-sentinel 连接成功"
             SENTINEL_RESULT=0
         else
@@ -95,8 +118,20 @@ if docker ps | grep -q redis-sentinel; then
             SENTINEL_RESULT=1
         fi
     else
-        echo "[FAIL] redis-sentinel 容器未找到"
-        SENTINEL_RESULT=1
+        # 回退到 docker exec
+        sentinel_container=$(docker ps -qf "name=^redis-sentinel$")
+        if [ -n "$sentinel_container" ]; then
+            if docker exec "$sentinel_container" redis-cli -p 26379 ping 2>/dev/null | grep -q PONG; then
+                echo "[OK] redis-sentinel 连接成功"
+                SENTINEL_RESULT=0
+            else
+                echo "[FAIL] redis-sentinel 连接失败"
+                SENTINEL_RESULT=1
+            fi
+        else
+            echo "[FAIL] redis-sentinel 容器未找到"
+            SENTINEL_RESULT=1
+        fi
     fi
 else
     echo "[FAIL] redis-sentinel 容器未运行"
@@ -113,72 +148,69 @@ if [ -n "$cluster_container" ]; then
     # grokzen/redis-cluster: 单个容器，内部运行 6 个节点
     echo "检测到 grokzen/redis-cluster（单容器模式）"
     # grokzen 默认无密码，测试连接
-    for i in 0 1 2 3 4 5; do
-        port=$((7000 + i))
-        echo "测试 redis-cluster 节点 $((i+1)) (容器内端口 $port)..."
-        if docker exec "$cluster_container" redis-cli -p $port ping 2>/dev/null | grep -q PONG; then
-            echo "[OK] redis-cluster 节点 $((i+1)) 连接成功"
-        else
-            echo "[FAIL] redis-cluster 节点 $((i+1)) 连接失败"
-            CLUSTER_RESULT=1
-        fi
-    done
-    
-    # 检查集群初始化状态
-    echo "检查集群初始化状态..."
-    CLUSTER_STATE=$(docker exec "$cluster_container" redis-cli -p 7000 CLUSTER INFO 2>/dev/null | grep "cluster_state" | cut -d: -f2 | tr -d '\r\n ' || echo "fail")
-    if [ "$CLUSTER_STATE" = "ok" ]; then
-        echo "[OK] Redis 集群已正确初始化 (cluster_state: ok)"
-        CLUSTER_NODES=$(docker exec "$cluster_container" redis-cli -p 7000 CLUSTER NODES 2>/dev/null | wc -l | tr -d ' ')
-        echo "    集群节点数: $CLUSTER_NODES"
-        
-        # 检查 CLUSTER SLOTS 返回的地址
-        echo "检查 CLUSTER SLOTS 返回的地址..."
-        SLOTS_OUTPUT=$(docker exec "$cluster_container" redis-cli -p 7000 CLUSTER SLOTS 2>/dev/null | head -20)
-        CONTAINER_IP_COUNT=$(echo "$SLOTS_OUTPUT" | grep -E "172\.25\.0\.[0-9]+" | wc -l | tr -d ' ')
-        if [ "$CONTAINER_IP_COUNT" -gt 0 ]; then
-            echo "    [WARN] CLUSTER SLOTS 返回 $CONTAINER_IP_COUNT 个容器内部 IP（grokzen 可能使用容器内部 IP）"
-        else
-            echo "    [OK] CLUSTER SLOTS 返回的地址都是可访问的"
-        fi
-    else
-        echo "[FAIL] Redis 集群未正确初始化 (cluster_state: $CLUSTER_STATE)"
-        CLUSTER_RESULT=1
-    fi
-else
-    # bitnami/redis-cluster: 多个容器，每个容器一个节点
-    echo "检测到 bitnami/redis-cluster（多容器模式）"
+    # 宿主机端口：7001-7006 对应容器内端口 7000-7005
     for i in 1 2 3 4 5 6; do
-        container_name="redis-cluster-$i"
-        port=$((7000 + i))
-        if docker ps | grep -q "$container_name"; then
-            test_redis "$container_name" "localhost" "$port" "$REDIS_PASSWORD"
-            if [ $? -ne 0 ]; then
+        host_port=$((7000 + i))
+        echo "测试 redis-cluster 节点 $i (宿主机端口 $host_port)..."
+        # 优先使用宿主机 redis-cli
+        if command -v redis-cli >/dev/null 2>&1; then
+            if redis-cli -h localhost -p $host_port ping 2>/dev/null | grep -q PONG; then
+                echo "[OK] redis-cluster 节点 $i 连接成功"
+            else
+                echo "[FAIL] redis-cluster 节点 $i 连接失败"
                 CLUSTER_RESULT=1
             fi
         else
-            echo "[FAIL] $container_name 容器未运行"
-            CLUSTER_RESULT=1
+            # 回退到 docker exec（容器内端口 7000-7005）
+            container_port=$((6999 + i))
+            if docker exec "$cluster_container" redis-cli -p $container_port ping 2>/dev/null | grep -q PONG; then
+                echo "[OK] redis-cluster 节点 $i 连接成功"
+            else
+                echo "[FAIL] redis-cluster 节点 $i 连接失败"
+                CLUSTER_RESULT=1
+            fi
         fi
     done
     
     # 检查集群初始化状态
     echo "检查集群初始化状态..."
-    cluster_container=$(docker ps -qf "name=^redis-cluster-1$")
-    if [ -n "$cluster_container" ]; then
-        CLUSTER_STATE=$(docker exec "$cluster_container" redis-cli -h localhost -p 6379 -a "$REDIS_PASSWORD" CLUSTER INFO 2>/dev/null | grep "cluster_state" | cut -d: -f2 | tr -d '\r\n ' || echo "fail")
+    # 使用宿主机端口 7001（对应容器内 7000）
+    if command -v redis-cli >/dev/null 2>&1; then
+        CLUSTER_STATE=$(redis-cli -h localhost -p 7001 CLUSTER INFO 2>/dev/null | grep "cluster_state" | cut -d: -f2 | tr -d '\r\n ' || echo "fail")
         if [ "$CLUSTER_STATE" = "ok" ]; then
             echo "[OK] Redis 集群已正确初始化 (cluster_state: ok)"
-            CLUSTER_NODES=$(docker exec "$cluster_container" redis-cli -h localhost -p 6379 -a "$REDIS_PASSWORD" CLUSTER NODES 2>/dev/null | wc -l | tr -d ' ')
+            CLUSTER_NODES=$(redis-cli -h localhost -p 7001 CLUSTER NODES 2>/dev/null | wc -l | tr -d ' ')
             echo "    集群节点数: $CLUSTER_NODES"
+
+            # 检查 CLUSTER SLOTS 返回的地址
+            echo "检查 CLUSTER SLOTS 返回的地址..."
+            SLOTS_OUTPUT=$(redis-cli -h localhost -p 7001 CLUSTER SLOTS 2>/dev/null | head -20)
+            CONTAINER_IP_COUNT=$(echo "$SLOTS_OUTPUT" | grep -E "172\.25\.0\.[0-9]+" | wc -l | tr -d ' ')
+            if [ "$CONTAINER_IP_COUNT" -gt 0 ]; then
+                echo "    [WARN] CLUSTER SLOTS 返回 $CONTAINER_IP_COUNT 个容器内部 IP（grokzen 可能使用容器内部 IP）"
+            else
+                echo "    [OK] CLUSTER SLOTS 返回的地址都是可访问的"
+            fi
         else
             echo "[FAIL] Redis 集群未正确初始化 (cluster_state: $CLUSTER_STATE)"
             CLUSTER_RESULT=1
         fi
     else
-        echo "[FAIL] 无法检查集群状态，redis-cluster-1 容器未找到"
-        CLUSTER_RESULT=1
+        # 回退到 docker exec
+        CLUSTER_STATE=$(docker exec "$cluster_container" redis-cli -p 7000 CLUSTER INFO 2>/dev/null | grep "cluster_state" | cut -d: -f2 | tr -d '\r\n ' || echo "fail")
+        if [ "$CLUSTER_STATE" = "ok" ]; then
+            echo "[OK] Redis 集群已正确初始化 (cluster_state: ok)"
+            CLUSTER_NODES=$(docker exec "$cluster_container" redis-cli -p 7000 CLUSTER NODES 2>/dev/null | wc -l | tr -d ' ')
+            echo "    集群节点数: $CLUSTER_NODES"
+        else
+            echo "[FAIL] Redis 集群未正确初始化 (cluster_state: $CLUSTER_STATE)"
+            CLUSTER_RESULT=1
+        fi
     fi
+else
+    # bitnami/redis-cluster: 多个容器，每个容器一个节点（当前未使用）
+    echo "[FAIL] 未找到 redis-cluster 容器"
+    CLUSTER_RESULT=1
 fi
 echo ""
 
