@@ -126,6 +126,34 @@ if [ -n "$cluster_container" ]; then
         # 检查集群节点数量
         CLUSTER_NODES=$(docker exec "$cluster_container" redis-cli -p 6379 -a "$REDIS_PASSWORD" CLUSTER NODES 2>/dev/null | wc -l | tr -d ' ')
         echo "    集群节点数: $CLUSTER_NODES"
+        
+        # 检查 cluster-announce-ip 配置
+        echo "检查 cluster-announce-ip 配置..."
+        ANNOUNCE_IP_OK=0
+        for i in 1 2 3 4 5 6; do
+            container_name="redis-cluster-$i"
+            announce_ip=$(docker exec "$container_name" redis-cli -p 6379 -a "$REDIS_PASSWORD" CONFIG GET cluster-announce-ip 2>/dev/null | grep -v "Warning" | tail -1 | tr -d '\r\n ' || echo "")
+            if [ "$announce_ip" = "127.0.0.1" ]; then
+                echo "    [OK] $container_name: cluster-announce-ip = $announce_ip"
+            else
+                echo "    [FAIL] $container_name: cluster-announce-ip = '$announce_ip' (期望: 127.0.0.1)"
+                ANNOUNCE_IP_OK=1
+            fi
+        done
+        if [ $ANNOUNCE_IP_OK -ne 0 ]; then
+            echo "[FAIL] 部分节点的 cluster-announce-ip 配置不正确"
+            CLUSTER_RESULT=1
+        fi
+        
+        # 检查 CLUSTER SLOTS 返回的地址
+        echo "检查 CLUSTER SLOTS 返回的地址..."
+        SLOTS_OUTPUT=$(docker exec "$cluster_container" redis-cli -p 6379 -a "$REDIS_PASSWORD" CLUSTER SLOTS 2>/dev/null | grep -v "Warning" | head -20)
+        CONTAINER_IP_COUNT=$(echo "$SLOTS_OUTPUT" | grep -E "172\.25\.0\.[0-9]+" | wc -l | tr -d ' ')
+        if [ "$CONTAINER_IP_COUNT" -gt 0 ]; then
+            echo "    [WARN] CLUSTER SLOTS 仍返回 $CONTAINER_IP_COUNT 个容器内部 IP，客户端可能无法访问"
+        else
+            echo "    [OK] CLUSTER SLOTS 返回的地址都是宿主机可访问的地址"
+        fi
     else
         echo "[FAIL] Redis 集群未正确初始化 (cluster_state: $CLUSTER_STATE)"
         CLUSTER_RESULT=1
