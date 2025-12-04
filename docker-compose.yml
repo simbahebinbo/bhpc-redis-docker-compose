@@ -9,319 +9,150 @@ volumes:
   redis-sentinel-master-data:
   redis-sentinel-slave-data:
   redis-sentinel-data:
-  redis-cluster-data-1:
-  redis-cluster-data-2:
-  redis-cluster-data-3:
-  redis-cluster-data-4:
-  redis-cluster-data-5:
-  redis-cluster-data-6:
+  redis-cluster-data:
+
 
 services:
   # ========== 1. 单机模式 (Standalone) ==========
   redis-standalone:
-    image: redis:${REDIS_VERSION}
+    image: bitnami/redis:latest
     container_name: redis-standalone
-    command: redis-server --requirepass ${REDIS_PASSWORD}
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_AOF_ENABLED=no
     networks:
       - redis-privatenet
     ports:
       - "6380:6379"
     volumes:
-      - redis-standalone-data:/data
+      - redis-standalone-data:/bitnami/redis/data
     restart: unless-stopped
 
   # ========== 2. 主从复制模式 (Master-Slave Replication) ==========
   # 主节点
   redis-replication-master:
-    image: redis:${REDIS_VERSION}
+    image: bitnami/redis:latest
     container_name: redis-replication-master
-    command: redis-server --requirepass ${REDIS_PASSWORD} --masterauth ${REDIS_PASSWORD}
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_REPLICATION_MODE=master
+      - REDIS_AOF_ENABLED=no
     networks:
       - redis-privatenet
     ports:
       - "6381:6379"
     volumes:
-      - redis-replication-master-data:/data
+      - redis-replication-master-data:/bitnami/redis/data
     restart: unless-stopped
 
   # 从节点
   redis-replication-slave:
-    image: redis:${REDIS_VERSION}
+    image: bitnami/redis:latest
     container_name: redis-replication-slave
-    command: >
-      redis-server 
-      --requirepass ${REDIS_PASSWORD} 
-      --masterauth ${REDIS_PASSWORD} 
-      --replicaof redis-replication-master 6379
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_REPLICATION_MODE=replica
+      - REDIS_MASTER_HOST=redis-replication-master
+      - REDIS_MASTER_PORT_NUMBER=6379
+      - REDIS_MASTER_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_AOF_ENABLED=no
     networks:
       - redis-privatenet
     ports:
       - "6382:6379"
     volumes:
-      - redis-replication-slave-data:/data
+      - redis-replication-slave-data:/bitnami/redis/data
     depends_on:
       - redis-replication-master
     restart: unless-stopped
 
-  # ========== 3. 哨兵模式 (Sentinel) - 主从复制 + 哨兵监控 ==========
+  # ========== 3. 哨兵模式 (Sentinel) ==========
   # 主节点
   redis-sentinel-master:
-    image: redis:${REDIS_VERSION}
+    image: bitnami/redis:latest
     container_name: redis-sentinel-master
-    command: redis-server --requirepass ${REDIS_PASSWORD} --masterauth ${REDIS_PASSWORD}
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_REPLICATION_MODE=master
+      - REDIS_AOF_ENABLED=no
     networks:
       - redis-privatenet
     ports:
       - "6383:6379"
     volumes:
-      - redis-sentinel-master-data:/data
+      - redis-sentinel-master-data:/bitnami/redis/data
     restart: unless-stopped
 
   # 从节点
   redis-sentinel-slave:
-    image: redis:${REDIS_VERSION}
+    image: bitnami/redis:latest
     container_name: redis-sentinel-slave
-    command: >
-      redis-server 
-      --requirepass ${REDIS_PASSWORD} 
-      --masterauth ${REDIS_PASSWORD} 
-      --replicaof redis-sentinel-master 6379
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_REPLICATION_MODE=replica
+      - REDIS_MASTER_HOST=redis-sentinel-master
+      - REDIS_MASTER_PORT_NUMBER=6379
+      - REDIS_MASTER_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_AOF_ENABLED=no
     networks:
       - redis-privatenet
     ports:
       - "6384:6379"
     volumes:
-      - redis-sentinel-slave-data:/data
+      - redis-sentinel-slave-data:/bitnami/redis/data
     depends_on:
       - redis-sentinel-master
     restart: unless-stopped
 
   # 哨兵节点
   redis-sentinel:
-    image: redis:${REDIS_VERSION}
+    image: bitnami/redis-sentinel:latest
     container_name: redis-sentinel
-    command: >
-      redis-sentinel /etc/redis/sentinel.conf --sentinel
+    environment:
+      - REDIS_SENTINEL_DOWN_AFTER_MILLISECONDS=5000
+      - REDIS_SENTINEL_FAILOVER_TIMEOUT=60000
+      - REDIS_SENTINEL_QUORUM=2
+      - REDIS_MASTER_SET=mymaster
+      - REDIS_MASTER_HOST=redis-sentinel-master
+      - REDIS_MASTER_PORT_NUMBER=6379
+      - REDIS_MASTER_PASSWORD=${REDIS_PASSWORD}
     networks:
       - redis-privatenet
     ports:
       - "6385:26379"
     volumes:
-      - ./sentinel.conf:/etc/redis/sentinel.conf
-      - redis-sentinel-data:/data
+      - redis-sentinel-data:/bitnami/redis-sentinel/data
     depends_on:
       - redis-sentinel-master
       - redis-sentinel-slave
     restart: unless-stopped
 
   # ========== 4. 集群模式 (Cluster) ==========
-  redis-cluster-1:
-    image: redis:${REDIS_VERSION}
-    container_name: redis-cluster-1
-    command: >
-      redis-server 
-      --requirepass ${REDIS_PASSWORD} 
-      --masterauth ${REDIS_PASSWORD} 
-      --cluster-enabled yes 
-      --cluster-config-file nodes-1.conf 
-      --cluster-node-timeout 5000 
-      --appendonly yes
+  redis-cluster:
+    image: grokzen/redis-cluster:latest
+    container_name: redis-cluster
+    environment:
+      - IP=0.0.0.0
+      - INITIAL_PORT=7000
+      - MASTERS=3
+      - SLAVES_PER_MASTER=1
     networks:
       - redis-privatenet
     ports:
-      - "7001:6379"
-      - "17001:16379"
+      - "7000:7000"
+      - "7001:7001"
+      - "7002:7002"
+      - "7003:7003"
+      - "7004:7004"
+      - "7005:7005"
+      # 集群总线端口
+      - "17000:17000"
+      - "17001:17001"
+      - "17002:17002"
+      - "17003:17003"
+      - "17004:17004"
+      - "17005:17005"
     volumes:
-      - redis-cluster-data-1:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
+      - redis-cluster-data:/data
     restart: unless-stopped
 
-  redis-cluster-2:
-    image: redis:${REDIS_VERSION}
-    container_name: redis-cluster-2
-    command: >
-      redis-server 
-      --requirepass ${REDIS_PASSWORD} 
-      --masterauth ${REDIS_PASSWORD} 
-      --cluster-enabled yes 
-      --cluster-config-file nodes-2.conf 
-      --cluster-node-timeout 5000 
-      --appendonly yes
-    networks:
-      - redis-privatenet
-    ports:
-      - "7002:6379"
-      - "17002:16379"
-    volumes:
-      - redis-cluster-data-2:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-    restart: unless-stopped
-
-  redis-cluster-3:
-    image: redis:${REDIS_VERSION}
-    container_name: redis-cluster-3
-    command: >
-      redis-server 
-      --requirepass ${REDIS_PASSWORD} 
-      --masterauth ${REDIS_PASSWORD} 
-      --cluster-enabled yes 
-      --cluster-config-file nodes-3.conf 
-      --cluster-node-timeout 5000 
-      --appendonly yes
-    networks:
-      - redis-privatenet
-    ports:
-      - "7003:6379"
-      - "17003:16379"
-    volumes:
-      - redis-cluster-data-3:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-    restart: unless-stopped
-
-  redis-cluster-4:
-    image: redis:${REDIS_VERSION}
-    container_name: redis-cluster-4
-    command: >
-      redis-server 
-      --requirepass ${REDIS_PASSWORD} 
-      --masterauth ${REDIS_PASSWORD} 
-      --cluster-enabled yes 
-      --cluster-config-file nodes-4.conf 
-      --cluster-node-timeout 5000 
-      --appendonly yes
-    networks:
-      - redis-privatenet
-    ports:
-      - "7004:6379"
-      - "17004:16379"
-    volumes:
-      - redis-cluster-data-4:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-    restart: unless-stopped
-
-  redis-cluster-5:
-    image: redis:${REDIS_VERSION}
-    container_name: redis-cluster-5
-    command: >
-      redis-server 
-      --requirepass ${REDIS_PASSWORD} 
-      --masterauth ${REDIS_PASSWORD} 
-      --cluster-enabled yes 
-      --cluster-config-file nodes-5.conf 
-      --cluster-node-timeout 5000 
-      --appendonly yes
-    networks:
-      - redis-privatenet
-    ports:
-      - "7005:6379"
-      - "17005:16379"
-    volumes:
-      - redis-cluster-data-5:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-    restart: unless-stopped
-
-  redis-cluster-6:
-    image: redis:${REDIS_VERSION}
-    container_name: redis-cluster-6
-    command: >
-      redis-server 
-      --requirepass ${REDIS_PASSWORD} 
-      --masterauth ${REDIS_PASSWORD} 
-      --cluster-enabled yes 
-      --cluster-config-file nodes-6.conf 
-      --cluster-node-timeout 5000 
-      --appendonly yes
-    networks:
-      - redis-privatenet
-    ports:
-      - "7006:6379"
-      - "17006:16379"
-    volumes:
-      - redis-cluster-data-6:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-    restart: unless-stopped
-
-  # Redis 集群初始化服务
-  redis-cluster-init:
-    image: redis:${REDIS_VERSION}
-    container_name: redis-cluster-init
-    command:
-      - sh
-      - -c
-      - |
-        set -e
-        IP1=$$(getent hosts redis-cluster-1 | awk '{print $$1}')
-        IP2=$$(getent hosts redis-cluster-2 | awk '{print $$1}')
-        IP3=$$(getent hosts redis-cluster-3 | awk '{print $$1}')
-        IP4=$$(getent hosts redis-cluster-4 | awk '{print $$1}')
-        IP5=$$(getent hosts redis-cluster-5 | awk '{print $$1}')
-        IP6=$$(getent hosts redis-cluster-6 | awk '{print $$1}')
-        sleep 2
-        # 清理所有节点的集群状态
-        for i in 1 2 3 4 5 6; do
-          redis-cli -h redis-cluster-$$i -p 6379 -a ${REDIS_PASSWORD} CLUSTER RESET HARD
-        done
-        sleep 2
-        # 创建集群
-        redis-cli -h redis-cluster-1 -p 6379 -a ${REDIS_PASSWORD} --cluster create $$IP1:6379 $$IP2:6379 $$IP3:6379 $$IP4:6379 $$IP5:6379 $$IP6:6379 --cluster-replicas 1 --cluster-yes
-        sleep 3
-        # 设置 cluster-announce 配置
-        for i in 1 2 3 4 5 6; do
-          port=$$((7000 + i))
-          bus_port=$$((17000 + i))
-          redis-cli -h redis-cluster-$$i -p 6379 -a ${REDIS_PASSWORD} CONFIG SET cluster-announce-ip 127.0.0.1
-          redis-cli -h redis-cluster-$$i -p 6379 -a ${REDIS_PASSWORD} CONFIG SET cluster-announce-port $$port
-          redis-cli -h redis-cluster-$$i -p 6379 -a ${REDIS_PASSWORD} CONFIG SET cluster-announce-bus-port $$bus_port
-        done
-        sleep 3
-        # 强制所有节点使用 announce 的 IP 重新握手
-        # 从每个节点向其他节点发送 MEET，使用 announce 的 IP 和端口
-        for i in 1 2 3 4 5 6; do
-          for j in 1 2 3 4 5 6; do
-            if [ $$i -ne $$j ]; then
-              meet_port=$$((7000 + j))
-              redis-cli -h redis-cluster-$$i -p 6379 -a ${REDIS_PASSWORD} CLUSTER MEET 127.0.0.1 $$meet_port || true
-            fi
-          done
-        done
-        sleep 5
-    networks:
-      - redis-privatenet
-    depends_on:
-      redis-cluster-1:
-        condition: service_healthy
-      redis-cluster-2:
-        condition: service_healthy
-      redis-cluster-3:
-        condition: service_healthy
-      redis-cluster-4:
-        condition: service_healthy
-      redis-cluster-5:
-        condition: service_healthy
-      redis-cluster-6:
-        condition: service_healthy
-    restart: "no"
