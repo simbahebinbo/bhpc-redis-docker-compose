@@ -114,24 +114,24 @@ cluster_container=$(docker ps -qf "name=^redis-cluster$")
 if [ -n "$cluster_container" ]; then
     # grokzen/redis-cluster: 单个容器，内部运行 6 个节点
     echo "检测到 grokzen/redis-cluster（单容器模式）"
-    # grokzen 默认无密码，测试连接（容器内端口 7000-7005）
-    for i in 0 1 2 3 4 5; do
+    # grokzen 默认无密码，测试连接（容器内端口 7001-7006）
+    for i in 1 2 3 4 5 6; do
         container_port=$((7000 + i))
-        echo "测试 redis-cluster 节点 $((i+1)) (容器内端口 $container_port)..."
+        echo "测试 redis-cluster 节点 $i (容器内端口 $container_port)..."
         if docker exec "$cluster_container" redis-cli -p $container_port ping 2>/dev/null | grep -q PONG; then
-            echo "[OK] redis-cluster 节点 $((i+1)) 连接成功"
+            echo "[OK] redis-cluster 节点 $i 连接成功"
         else
-            echo "[FAIL] redis-cluster 节点 $((i+1)) 连接失败"
+            echo "[FAIL] redis-cluster 节点 $i 连接失败"
             CLUSTER_RESULT=1
         fi
     done
     
     # 检查集群初始化状态
     echo "检查集群初始化状态..."
-    CLUSTER_STATE=$(docker exec "$cluster_container" redis-cli -p 7000 CLUSTER INFO 2>/dev/null | grep "cluster_state" | cut -d: -f2 | tr -d '\r\n ' || echo "fail")
+    CLUSTER_STATE=$(docker exec "$cluster_container" redis-cli -p 7001 CLUSTER INFO 2>/dev/null | grep "cluster_state" | cut -d: -f2 | tr -d '\r\n ' || echo "fail")
     if [ "$CLUSTER_STATE" = "ok" ]; then
         echo "[OK] Redis 集群已正确初始化 (cluster_state: ok)"
-        CLUSTER_NODES=$(docker exec "$cluster_container" redis-cli -p 7000 CLUSTER NODES 2>/dev/null | wc -l | tr -d ' ')
+        CLUSTER_NODES=$(docker exec "$cluster_container" redis-cli -p 7001 CLUSTER NODES 2>/dev/null | wc -l | tr -d ' ')
         echo "    集群节点数: $CLUSTER_NODES"
     else
         echo "[FAIL] Redis 集群未正确初始化 (cluster_state: $CLUSTER_STATE)"

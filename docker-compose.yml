@@ -133,26 +133,26 @@ services:
     container_name: redis-cluster
     environment:
       - IP=0.0.0.0
-      - INITIAL_PORT=7000
+      - INITIAL_PORT=7001
       - MASTERS=3
       - SLAVES_PER_MASTER=1
     networks:
       - redis-privatenet
     ports:
-      # grokzen 内部使用 7000-7005，映射到宿主机 7000-7005
-      - "7000:7000"
+      # grokzen 内部使用 7001-7006，映射到宿主机 7001-7006
       - "7001:7001"
       - "7002:7002"
       - "7003:7003"
       - "7004:7004"
       - "7005:7005"
-      # 集群总线端口
-      - "17000:17000"
+      - "7006:7006"
+      # 集群总线端口（容器内部 17001-17006，映射到宿主机 17001-17006）
       - "17001:17001"
       - "17002:17002"
       - "17003:17003"
       - "17004:17004"
       - "17005:17005"
+      - "17006:17006"
     volumes:
       - redis-cluster-data:/data
       # 挂载自定义模板文件，添加 protected-mode no 配置

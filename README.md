@@ -21,8 +21,8 @@
    - 连接方式: 通过哨兵端口 `6385` 连接
 
 4. **集群模式 (Cluster)**
-   - 节点端口: `7000-7005` (容器: `redis-cluster` )
-   - 集群总线端口: `17000-17005`
+   - 节点端口: `7001-7006` (容器: `redis-cluster` )
+   - 集群总线端口: `17001-17006`
 
 
 ### 使用方式
@@ -76,5 +76,5 @@ redis-cli -h localhost -p 6385 -a 123456
 
 * 集群模式
 ```shell
-redis-cli -h localhost -p 7000 -c
+redis-cli -h localhost -p 7001 -c
 ```
