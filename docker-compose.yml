@@ -26,7 +26,6 @@ services:
       - "6380:6379"
     volumes:
       - redis-standalone-data:/bitnami/redis/data
-    restart: unless-stopped
 
   # ========== 2. 主从复制模式 (Master-Slave Replication) ==========
   # 主节点
@@ -43,7 +42,6 @@ services:
       - "6381:6379"
     volumes:
       - redis-replication-master-data:/bitnami/redis/data
-    restart: unless-stopped
 
   # 从节点
   redis-replication-slave:
@@ -64,7 +62,6 @@ services:
       - redis-replication-slave-data:/bitnami/redis/data
     depends_on:
       - redis-replication-master
-    restart: unless-stopped
 
   # ========== 3. 哨兵模式 (Sentinel) ==========
   # 主节点
@@ -81,7 +78,6 @@ services:
       - "6383:6379"
     volumes:
       - redis-sentinel-master-data:/bitnami/redis/data
-    restart: unless-stopped
 
   # 从节点
   redis-sentinel-slave:
@@ -102,7 +98,6 @@ services:
       - redis-sentinel-slave-data:/bitnami/redis/data
     depends_on:
       - redis-sentinel-master
-    restart: unless-stopped
 
   # 哨兵节点
   redis-sentinel:
@@ -125,7 +120,6 @@ services:
     depends_on:
       - redis-sentinel-master
       - redis-sentinel-slave
-    restart: unless-stopped
 
   # ========== 4. 集群模式 (Cluster) ==========
   redis-cluster:
@@ -157,5 +151,4 @@ services:
       - redis-cluster-data:/data
       # 挂载自定义模板文件，添加 protected-mode no 配置
       - ./redis-cluster.tmpl:/redis-conf/redis-cluster.tmpl:ro
-    restart: unless-stopped
 
